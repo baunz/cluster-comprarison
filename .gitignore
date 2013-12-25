@@ -1,6 +1,16 @@
-*.class
-
-# Package Files #
-*.jar
-*.war
-*.ear
+.classpath
+.project
+.settings
+.gradle
+.svn
+target/
+*.log
+.*
+*.iml
+*.pyc
+!.gitignore
+build-eclipse/
+bin/
+build/
+checkstyle/
+cacheFileTreeWalker
