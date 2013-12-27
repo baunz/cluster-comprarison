@@ -14,11 +14,10 @@ import org.apache.mahout.clustering.iterator.KMeansClusteringPolicy;
 import org.apache.mahout.clustering.kmeans.Kluster;
 import org.apache.mahout.clustering.streaming.cluster.StreamingKMeans;
 import org.apache.mahout.common.distance.CosineDistanceMeasure;
-import org.apache.mahout.common.distance.DistanceMeasure;
 import org.apache.mahout.math.Centroid;
 import org.apache.mahout.math.RandomAccessSparseVector;
 import org.apache.mahout.math.Vector;
-import org.apache.mahout.math.neighborhood.ProjectionSearch;
+import org.apache.mahout.math.neighborhood.FastProjectionSearch;
 import org.apache.mahout.math.neighborhood.UpdatableSearcher;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,7 +34,7 @@ public class ClusterCompare {
     private List<Vector> vectors = Lists.newArrayList();
 
     // total points
-    private int numDataPoints = (int) 10e5;
+    private int numDataPoints = (int) 40000;
 
     // to prevent us from needing to much ram
     private int testPoints = (int) 10000;
@@ -49,9 +48,9 @@ public class ClusterCompare {
     // elements set per vector
     private int averageElementsSet = 10;
 
-    private DistanceMeasure distanceMeasure = new CosineDistanceMeasure();
-
     private static final Logger LOG = LoggerFactory.getLogger(ClusterCompare.class);
+
+    private DelegatingDistanceMeasure distanceMeasure = new DelegatingDistanceMeasure(new CosineDistanceMeasure());
 
     @Before
     public void before() {
@@ -71,8 +70,6 @@ public class ClusterCompare {
 
     @Test
     public void testKMeans() {
-
-        DistanceMeasure distanceMeasure = new CosineDistanceMeasure();
 
         List<Cluster> seedCentroids = Lists.newArrayList();
         Random r = new Random();
@@ -97,8 +94,8 @@ public class ClusterCompare {
 
             @Override
             public Iterator<Vector> iterator() {
-                LOG.info("Iteration " + iterationCount + " " + (iterationCount * numDataPoints) / Math.max(1, watch.elapsed(TimeUnit.SECONDS))
-                    + " points per second");
+                LOG.info(getSummary(numDataPoints * iterationCount, watch));
+                LOG.info(distanceMeasure.toString());
                 iterationCount++;
                 return Iterables.limit(Iterables.cycle(vectors), numDataPoints).iterator();
             }
@@ -112,7 +109,7 @@ public class ClusterCompare {
     @Test
     public void testStreaming() {
 
-        StreamingKMeans streamingKMeans = new StreamingKMeans(new ProjectionSearch(distanceMeasure, 3, 2), (int) Math.log(numDataPoints));
+        StreamingKMeans streamingKMeans = new StreamingKMeans(new FastProjectionSearch(distanceMeasure, 3, 2), (int) Math.log(numDataPoints));
 
         final Stopwatch watch = new Stopwatch().start();
         Iterable<Centroid> allDataPoints =
@@ -123,13 +120,20 @@ public class ClusterCompare {
                 @Override
                 public Centroid apply(Vector input) {
                     Centroid centroid = new Centroid(numPoints++, input, 1);
-                    if (numPoints % 100000 == 0) {
-                        LOG.info(numPoints + " points, " + (numPoints / Math.max(1, watch.elapsed(TimeUnit.SECONDS)) + " per second"));
+                    if (numPoints % (numDataPoints / 10) == 0) {
+                        LOG.info(distanceMeasure.toString());
+                        LOG.info(getSummary(numPoints, watch));
                     }
                     return centroid;
                 }
             });
         UpdatableSearcher clusters = streamingKMeans.cluster(allDataPoints);
         LOG.info(watch.toString() + " for " + size(clusters) + " clusters");
+    }
+
+    private String getSummary(int numPoints, Stopwatch stopwatch) {
+        return String.format("numPoints %d, %f points per second, distance measure calc. per point %f", numPoints,
+            ((double) numPoints / Math.max(1, stopwatch.elapsed(TimeUnit.SECONDS))),
+            (double) distanceMeasure.getInvocations() / Math.max(1, numPoints));
     }
 }
