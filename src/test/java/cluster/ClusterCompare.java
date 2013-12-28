@@ -34,7 +34,7 @@ public class ClusterCompare {
     private List<Vector> vectors = Lists.newArrayList();
 
     // total points
-    private int numDataPoints = (int) 40000;
+    private int numDataPoints = (int) 400000;
 
     // to prevent us from needing to much ram
     private int testPoints = (int) 10000;
@@ -103,13 +103,17 @@ public class ClusterCompare {
         ClusterClassifier clusters = ClusterIterator.iterate(allDataPoints, prior, 10);
 
         LOG.info(watch.toString() + " for " + clusters.getModels().size() + " clusters");
+        LOG.info(distanceMeasure.toString());
 
     }
 
     @Test
     public void testStreaming() {
 
-        StreamingKMeans streamingKMeans = new StreamingKMeans(new FastProjectionSearch(distanceMeasure, 3, 2), (int) Math.log(numDataPoints));
+        int numSketchClusters = (int) (finalClusters * Math.log(numDataPoints));
+        LOG.info("Sketch clusters: " + numSketchClusters);
+        StreamingKMeans streamingKMeans =
+            new StreamingKMeans(new FastProjectionSearch(distanceMeasure, 3, 2), numSketchClusters);
 
         final Stopwatch watch = new Stopwatch().start();
         Iterable<Centroid> allDataPoints =
@@ -129,6 +133,7 @@ public class ClusterCompare {
             });
         UpdatableSearcher clusters = streamingKMeans.cluster(allDataPoints);
         LOG.info(watch.toString() + " for " + size(clusters) + " clusters");
+        LOG.info(distanceMeasure.toString());
     }
 
     private String getSummary(int numPoints, Stopwatch stopwatch) {
